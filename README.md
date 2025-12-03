@@ -1,6 +1,6 @@
 # Smart Office AC System - Q-Learning
 
-Bir önceki projemden[Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak farklı bir problemi ele aldım. 
+Bir önceki projemden [Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak farklı bir problemi ele aldım. 
 
 ## 1. Giriş
 
@@ -193,7 +193,10 @@ Toplam eğitim süresi: **1.2 dakika** sürdü.
 ## 7. Test Sonuçları
 
 Eğittiğim modeli standart yaz günü senaryosunda test ettiğimde şu sonuçları aldım:
-
+```
+STANDARD_TEMPS = [20, 19, 19, 20, 21, 22, 24, 26, 28, 30, 32, 34,
+                  35, 35, 34, 32, 30, 29, 28, 27, 26, 25, 24, 23]
+```
 ### Genel Performans
 
 | Metrik | Değer |
