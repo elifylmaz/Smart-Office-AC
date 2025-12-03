@@ -1,6 +1,6 @@
 # Smart Office AC System - Q-Learning
 
-Bir önceki projemden[Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak ile farklı bir problemi ele aldım. 
+Bir önceki projemden[Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak farklı bir problemi ele aldım. 
 
 ## 1. Giriş
 
@@ -63,7 +63,7 @@ Sistemi optimize etmek için karmaşık bir ödül yapısı kurguladım:
 **Mesai Saatleri (09:00-17:00):**
 - Konfor aralığındayken OFF: +100 (Enerji tasarrufu)
 - Konfor aralığında diğer aksiyonlar: +80 - (maliyet × 5)
-- Özel koruma: 11:00-16:00 arası sıcaklık >22.8°C ise OFF: -500 (Kritik)
+- Özel koruma (Noon Shield): 11:00-16:00 arası sıcaklık >22.8°C ise OFF: -500 (Kritik)
 - Normal saatlerde >23.5°C ise OFF: -100
 - Konfor dışında OFF: -300 ek ceza
 - Konfor dışında uzaklık bazlı ceza: mesafe × 50
@@ -199,9 +199,9 @@ Eğittiğim modeli standart yaz günü senaryosunda test ettiğimde şu sonuçla
 | Metrik | Değer |
 |:-------|:------|
 | Mesai Saati Konfor Başarısı | %88.9 (8/9 saat) |
-| Toplam Enerji Tüketimi | 9.5 kW |
-| Mesai Saati Enerji | 6.5 kW (%68.4) |
-| Ortalama Mesai Sıcaklığı | 23.1°C |
+| Toplam Enerji Tüketimi | 8.0 kW |
+| Mesai Saati Enerji | 5.5 kW (%68.4) |
+| Ortalama Mesai Sıcaklığı | 23.2°C |
 | İhlal Sayısı | 1/9 saat |
 
 ### Saatlik Performans Özeti
@@ -215,7 +215,7 @@ Eğittiğim modeli standart yaz günü senaryosunda test ettiğimde şu sonuçla
 - 10:00-13:00: Konfor aralığında, akıllı kapalı/açık stratejisi
 - 14:00: Tek ihlal (24.6°C), hemen müdahale
 - 15:00-17:00: Konfor aralığına dönüş
-- Enerji: 6.5 kW
+- Enerji: 5.5 kW
 
 **Akşam (18:00-23:00):** Sistem kapalı, doğal soğuma → Enerji: 0.0 kW
 
