@@ -1,10 +1,10 @@
-# Smart Office AC System - Q-Learning
+# Smart Office AC System - Q-Learning (Eco-Smart Mode)
 
-Bir önceki projemden [Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak farklı bir problemi ele aldım. 
+Bir önceki projemden [Taxi-env](https://github.com/elifylmaz/Taxi-QLearning) yola çıkarak farklı bir problemi ele aldım ve geliştirdim.
 
 ## 1. Giriş
 
-Bu çalışmada bir ofis binasındaki akıllı klima sistemini optimize etmeyi hedefledim. Sistem, 24 saatlik bir gün boyunca iç ve dış sıcaklığı takip ederek en uygun klima ayarlarını öğreniyor. Action Masking kullanmadan geliştirdiğim projede toplamda **715** adet durum (state) bulunuyor. 100.000 episode süren eğitim sonucunda ajan, %94.4 konfor oranı ile ortalama 6.7 kW enerji tüketimi elde etmeyi başardı.
+Bu çalışmada bir ofis binasındaki akıllı klima sistemini optimize etmeyi hedefledim. Sistem, 24 saatlik bir gün boyunca iç ve dış sıcaklığı takip ederek en uygun klima ayarlarını öğreniyor. Action Masking kullanmadan geliştirdiğim bu ikinci versiyonda toplamda **8.976** adet durum (state) bulunuyor. 200.000 episode süren eğitim sonucunda ajan, **%90.9 konfor oranı** ile ortalama **7.0 kW** enerji tüketimi elde etmeyi başardı.
 
 ## 2. Ortam Tasarımı
 
@@ -14,158 +14,146 @@ Tasarladığım akıllı klima sistemini şu şekilde kurguladım:
 
 **Konfor Aralığı:** 22-24°C (Mesai saatlerinde hedeflenen sıcaklık)
 
+**Mesai Saatleri:** 08:00-19:00 (11 saatlik çalışma)
+
 **Sıcaklık Ayrıklaştırma (Discretization):**
 
-- İç Mekan: 13 farklı aralık (15°C - 30°C arası)
+- İç Mekan: 17 farklı aralık (15°C - 30°C arası)
+```python
+self.bins_room = np.array([15, 17, 19, 20, 21, 21.5, 22, 22.5, 23, 23.5, 24, 24.5, 25, 26, 28, 30])
 ```
-self.bins_room = np.array([15, 18, 20, 21, 22, 23, 23.5, 24, 25, 26, 28, 30])
-```
-- Dış Mekan: 11 farklı aralık (-5°C - 40°C arası)
-```
-self.bins_outside = np.array([-5, 0, 5, 10, 15, 20, 25, 30, 35, 40])
+- Dış Mekan: 22 farklı aralık (-10°C - 40°C arası)
+```python
+self.bins_outside = np.array([-10, -5, 0, 3, 6, 9, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40])
 ```
 
-**Zaman Periyotları:** 24 saatlik gün, 4 zaman dilimine ayrıldı:
-- Gece (00:00-05:00)
-- Hazırlık (06:00-08:00)
-- Mesai (09:00-17:00)
-- Akşam (18:00-23:00)
+**Zaman Periyotları:** 24 saatlik gün, saatlik takip yapılıyor (0-23 arası)
 
 **Dinamik Yapı:** Her reset işleminde iç ve dış sıcaklık rastgele belirleniyor.
 
-**Fizik Simülasyonu:** Dış hava ile iç mekan arasında ısı transferi simüle ediliyor.
+**Fizik Simülasyonu:** Dış hava ile iç mekan arasında ısı transferi simüle ediliyor (transfer katsayısı: 0.05).
 
 ### Aksiyonlar (7 Adet)
 
 Ajanın yapabileceği klima ayarlarını şu şekilde tanımladım:
 
-- **0:** OFF (Kapalı)
+- **0:** OFF (Kapalı) → 0.0°C değişim
 - **1:** Cool-Low (Düşük Soğutma) → -0.5°C
 - **2:** Cool-Mid (Orta Soğutma) → -1.5°C
 - **3:** Cool-High (Yüksek Soğutma) → -3.0°C
-- **4:** Heat-Low (Düşük Isıtma) → +0.5°C
-- **5:** Heat-Mid (Orta Isıtma) → +1.5°C
-- **6:** Heat-High (Yüksek Isıtma) → +3.0°C
+- **4:** Heat-Low (Düşük Isıtma) → +0.8°C
+- **5:** Heat-Mid (Orta Isıtma) → +2.0°C
+- **6:** Heat-High (Yüksek Isıtma) → +4.0°C
 
 ### Enerji Tüketimi
 
 Her aksiyonun enerji maliyetini şöyle belirledim:
 
 - **OFF:** 0.0 kW
-- **Low (1, 4):** 0.5 kW
-- **Mid (2, 5):** 1.0 kW
-- **High (3, 6):** 2.0 kW
+- **Cool-Low (1):** 0.2 kW
+- **Cool-Mid (2):** 1.0 kW
+- **Cool-High (3):** 2.5 kW
+- **Heat-Low (4):** 0.4 kW
+- **Heat-Mid (5):** 1.5 kW
+- **Heat-High (6):** 4.0 kW
 
 ### Ödül Mekanizması
 
-Sistemi optimize etmek için karmaşık bir ödül yapısı kurguladım:
+Sistemi optimize etmek için dengeli bir ödül yapısı kurguladım:
 
-**Mesai Saatleri (09:00-17:00):**
-- Konfor aralığındayken OFF: +100 (Enerji tasarrufu)
-- Konfor aralığında diğer aksiyonlar: +80 - (maliyet × 5)
-- Özel koruma (Noon Shield): 11:00-16:00 arası sıcaklık >22.8°C ise OFF: -500 (Kritik)
-- Normal saatlerde >23.5°C ise OFF: -100
-- Konfor dışında OFF: -300 ek ceza
-- Konfor dışında uzaklık bazlı ceza: mesafe × 50
+**Enerji Cezası (Her Adım):**
+- Tüketilen enerji × 2.0 kadar ödülden düşülür
 
-**Hazırlık Saatleri (06:00-08:00):**
-- Hedef: <23.0°C'ye düşürmek
-- >23.0°C iken OFF: -200
-- >23.0°C iken ısıtma: -500 (Mantıksız)
-- Hedefe ulaşıldıysa OFF: +20
-- Gereksiz işlem: -(maliyet × 10)
+**Mesai Saatleri (08:00-19:00):**
+- Konfor aralığındayken: +150 ödül
+- Konfor dışındayken: -100 - (mesafe × 20) ceza
+- Mesafe: Konfor aralığının sınırlarına olan minimum uzaklık
 
-**Kısıtlı Bölgeler (Gece & Akşam):**
-- OFF: +20
-- Diğer tüm aksiyonlar: -200 (Yasak)
+**Ekstrem Sıcaklık Koruması:**
+- Sıcaklık <10°C veya >35°C ise: -50 ek ceza
+
+**Çalışma Mantığı:**
+Bu ödül yapısı sayesinde ajan şunları öğreniyor:
+1. Mesai saatlerinde konfor aralığında kalmak en karlı
+2. Gereksiz enerji tüketiminden kaçınmak önemli
+3. Mesai dışı saatlerde sistemi kapalı tutmak mantıklı
+4. Ekstrem sıcaklıklara ulaşmadan müdahale etmek gerekli
 
 ## 3. Durum Uzayı (State Space)
 
 Durum uzayını hesaplarken şu yapıyı kullandım:
 
-- **İç Sıcaklık İndeksi:** 13 olası değer (bins_room)
-- **Dış Sıcaklık İndeksi:** 11 olası değer (bins_outside)
-- **Zaman Periyodu:** 5 olası değer (0: Gece, 1: Hazırlık, 2: Mesai, 3: Akşam, 4: Yedek)
+- **İç Sıcaklık İndeksi:** 17 olası değer (bins_room)
+- **Dış Sıcaklık İndeksi:** 22 olası değer (bins_outside)
+- **Saat Bilgisi:** 24 olası değer (0-23 arası)
 
 **Toplam Durum Sayısı:**
 
-13 × 11 × 5 = **715 Durum**
-
-Bu kompakt durum uzayı sayesinde hızlı bir öğrenme süreci elde ettim.
+17 × 22 × 24 = **8.976 Durum**
 
 ## 4. Yöntem
-
-Projeyi hayata geçirirken izlediğim yöntem ve belirlediğim parametreler şunlardır:
-
 - **Algoritma:** Problem çözümü için **Q-Learning** algoritmasını kullandım.
 - **Hiperparametreler:**
   - **Öğrenme Oranı (α):** 0.1
-  - **İndirim Faktörü (γ):** 0.99
+  - **İndirim Faktörü (γ):** 0.995 
   - **Başlangıç Keşif Oranı (ε):** 1.0
-  - **Epsilon Azalma:** 0.9999 (her adımda)
+  - **Epsilon Azalma:** 0.99996 
   - **Minimum Epsilon:** 0.01
 - **Eğitim Süreci:**
-  - Toplamda **100.000 episod** boyunca eğitim gerçekleştirdim.
-  - Gelişimi takip edebilmek adına her 2.000 episodda bir performans değerlendirmesi yaptım.
+  - Toplamda **200.000 episod** boyunca eğitim gerçekleştirdim.
+  - **3 farklı hava durumu senaryosu** üzerinde eğitim yaptım.
+  - Gelişimi takip edebilmek adına her 4.000 episodda bir performans değerlendirmesi yaptım.
   - Değerlendirme metriklerim: Konfor Oranı (%), Enerji Tüketimi (kW), Ortalama Ödül
-- Elde ettiğim en başarılı politikayı (policy) **`best_q_table.npy`** dosyasına kaydederek sakladım.
+- Elde ettiğim en başarılı politikayı **`best_q_table.npy`** dosyasına kaydederek sakladım.
 
 ## 5. Geliştirme Süreci
 
-Projeyi 5 temel adımda kurguladım ve uyguladım:
+Projeyi 4 temel adımda kurguladım ve uyguladım:
 
 ### 5.1. Ortamı (Environment) Oluşturdum
 
-İlk iş olarak akıllı ofis sisteminin dünyasını ve kurallarını tanımladım.
+İlk iş olarak ofis sistemini ve kurallarını tanımladım.
 
-- **`__init__`:** Konfor aralığını, sıcaklık binlerini, aksiyon etkilerini ve enerji maliyetlerini burada belirledim.
-- **`reset`:** Her yeni simülasyonda iç/dış sıcaklıkları rastgele atayarak ortamı sıfırlayan fonksiyon.
-- **`_get_obs`:** Ajanın karar verebilmesi için sıcaklık indekslerini ve zaman periyodunu döndürüyor.
-- **`_get_time_period`:** Saati alıp hangi zaman diliminde olduğumuzu hesaplayan yardımcı fonksiyon.
-- **`step`:** Ajanın seçtiği aksiyonu uygulayıp fizik simülasyonunu çalıştıran, ödülü hesaplayan ana fonksiyon.
-- **`render`:** Ofis durumunu, klima çalışmasını ve sıcaklık bilgilerini görselleştirdiğim kısım.
+- **`__init__`:** Konfor aralığını (22-24°C), mesai saatlerini (08:00-19:00), sıcaklık binlerini, aksiyon etkilerini ve enerji maliyetlerini burada belirledim.
+- **`reset`:** Her yeni simülasyonda iç/dış sıcaklıkları rastgele atayarak (18-28°C iç, 10-30°C dış) ortamı sıfırlayan fonksiyon.
+- **`_get_obs`:** Ajanın karar verebilmesi için sıcaklık indekslerini ve saat bilgisini döndürüyor.
+- **`step`:** Ajanın seçtiği aksiyonu uygulayıp fizik simülasyonunu çalıştıran, ödülü hesaplayan ana fonksiyon. Dış hava etkisi ile sıcaklık değişimini simüle ediyor.
+- **`render`:** Ofis durumunu, klima çalışmasını ve sıcaklık bilgilerini görselleştirdiğim kısım. Mesai saati ve konfor durumuna göre arka plan rengi değişiyor.
 
-### 5.2. State ve Action Kontrollerini Sağladım
-
-Kodun sağlıklı çalışıp çalışmadığını test etmek için bir doğrulama adımı ekledim.
-
-- Ortamı başlatıp rastgele hamleler yaptırarak sistemin tepkisini gözlemledim.
-- Ödül mekanizmasının ve sıcaklık değişimlerinin mantıklı işleyip işlemediğini teyit ettim.
-- Q-tablosunda veriyi işleyebilmek adına, gözlem durumunu (observation) benzersiz bir sayıya çeviren `state_to_index` fonksiyonunu yazdım.
-
-### 5.3. Rastgele Bir Episode Çalıştırıp Gözlemledim
+### 5.2. Rastgele Baseline Testi
 
 Ajanın henüz hiçbir şey öğrenmeden ortamda nasıl davrandığını görmek istedim.
 
+- **3 Senaryo Tanımladım:**
+  - **Hot Summer:** 24-38°C arası değişen aşırı sıcak gün
+  - **Mild Spring:** 15-28°C arası ılıman bahar günü
+  - **Cold Winter:** -3°C ile 14°C arası soğuk kış günü
 - **`run_random_scenario`:** Ajan tamamen rastgele aksiyonlarla 24 saatlik bir günü simüle etti.
-- Standart yaz günü sıcaklık profili kullandım (sabah serin, öğlen çok sıcak, akşam soğuyor).
-- Sonuç: %11.1 konfor oranı, -4814.9 toplam ödül → Eğitim gerekli!
-- **`show_animation`:** Kareleri birleştirerek görsel animasyon oluşturdum.
 
-### 5.4. Q-Learning Eğitimi Gerçekleştirdim
+### 5.3. Q-Learning Eğitimi Gerçekleştirdim
 
 Ajanı Q-Learning algoritması ile eğittim:
 
-- **Hazırlık:** Boş bir Q-Tablosu (715 × 7) oluşturdum ve hiperparametreleri ayarladım.
-- **Eğitim Döngüsü:** Ajana 24 saatlik günü tam 100.000 kez oynattım.
-- **Epsilon-Greedy:** Ajanın başlangıçta çok keşif yapmasını (ε=1.0), zamanla bildiği en iyi hamleyi yapmasını (ε→0.01) sağladım.
-- **Kayıt Mantığı:** Her 2.000 episodda performans ölçtüm. Eğer konfor oranı rekor kırarsa veya aynı konfor ile daha az enerji tüketiyorsa modeli `best_q_table.npy` olarak kaydettim.
-- **Sonuçları Görselleştirdim:** Konfor ve enerji grafiklerini çizdim.
+- **Hazırlık:** Boş bir Q-Tablosu (8.976 × 7) oluşturdum ve hiperparametreleri ayarladım.
+- **Eğitim Döngüsü:** Ajana 24 saatlik günü tam 200.000 kez oynattım.
+- **Senaryo Rotasyonu:** Her episodda 3 senaryo arasında dönüşümlü geçiş yaparak çeşitlilik sağladım.
+- **Epsilon-Greedy:** Ajanın başlangıçta çok keşif yapmasını (ε=1.0), zamanla bildiği en iyi hamleyi yapmasını sağladım.
+- **Kayıt Mantığı:** Her 4.000 episodda 3 senaryo üzerinde ortalama performans ölçtüm. Eğer konfor oranı rekor kırarsa veya aynı konfor ile daha az enerji tüketiyorsa modeli `best_q_table.npy` olarak kaydettim.
+- **Sonuçları Görselleştirdim:** Ödül ve konfor grafiklerini 5'li hareketli ortalama ile düzgünleştirerek çizdim.
 
-### 5.5. Best Q-Table ile Test ve Detaylı Analiz
+### 5.4. Best Q-Table ile Test ve Detaylı Analiz
 
-Son aşama.
+Son aşamada eğitilmiş modeli test ettim:
 
-- Kaydettiğim "en iyi modeli" yükleyerek standart yaz günü senaryosunda test ettim.
-- Bu aşamada ajan artık keşif yapmadı (ε=0), doğrudan öğrendiği optimal politikayı uyguladı.
-- **Detaylı Dashboard:** 6 farklı grafikle performansı analiz ettim:
-  - Saatlik Karar Geçmişi
-  - Ödül/Ceza Dağılımı
-  - Enerji Tüketimi
-  - Sıcaklık Performansı
-  - Mesai Saati Konfor Başarısı
-  - Genel Rapor Kartı
-- Animasyonu GIF olarak kaydedip görselleştirdim.
+- Kaydettiğim "en iyi modeli" yükleyerek 3 senaryo üzerinde detaylı test ettim.
+- Bu aşamada ajan artık keşif yapmadı doğrudan öğrendiği optimal politikayı uyguladı.
+- **Detaylı Dashboard:** 
+  - Tüm senaryoların sıcaklık kontrol grafiği
+  - Her senaryo için saatlik ödül dağılımı (3 grafik)
+  - Her senaryo için enerji tüketim grafiği (3 grafik)
+  - Her senaryo için mesai saati konfor başarı durumu (3 grafik)
+  - Genel özet rapor kartı (tablo)
+- Animasyonları GIF olarak kaydedip görselleştirdim.
 
 ## 6. Eğitim Sonuçları
 
@@ -173,63 +161,48 @@ Eğitim sürecinden elde ettiğim veriler aşağıdaki gibidir:
 
 | Episode | Epsilon | Konfor (%) | Enerji (kW) | Ödül | Durum |
 |:--------|:--------|:-----------|:------------|:-----|:------|
-| 2.000 | 0.819 | 77.8 | 7.5 | 866.9 | İlk Rekor |
-| 4.000 | 0.670 | 84.4 | 7.4 | 915.9 | Konfor ↑ |
-| 6.000 | 0.549 | 88.9 | 7.2 | 935.6 | Konfor ↑ |
-| 20.000 | 0.135 | 90.0 | 8.5 | 891.1 | %90 Geçti |
-| 22.000 | 0.111 | 90.0 | 7.2 | 948.1 | Enerji ↓ |
-| 30.000 | 0.050 | 91.1 | 7.7 | 931.3 | Konfor ↑ |
-| 32.000 | 0.041 | **94.4** | **6.7** | **995.5** | **EN İYİ** |
-| 100.000 | 0.010 | 91.1 | 8.1 | 907.3 | Final |
+| 4.000 | 0.852 | 90.9 | 8.1 | 1633.7 | İlk Rekor |
+| 8.000 | 0.726 | 90.9 | 8.0 | 1634.1 | Enerji ↓ |
+| 20.000 | 0.449 | 90.9 | 7.6 | 1634.7 | Enerji ↓ |
+| 24.000 | 0.383 | 90.9 | 7.4 | 1635.1 | Enerji ↓ |
+| **32.000** | **0.278** | **90.9** | **7.0** | **1636.0** | **EN İYİ** |
+| 40.000+ | 0.202 → 0.010 | 90.9 / 87.9 | 6.8 - 7.7 | 1535-1636 | Stabil |
+| 200.000 | 0.010 | 87.9 | 7.1 | 1551.3 | Final |
+
+![Eğitim Sonuçları](eğitim_grafiği.png)
 
 **Analiz:**
 
-Sonuçları incelediğimde, ajanın yaklaşık **30.000** episod civarında %90'ın üzerine çıktığını gördüm. Performansın zirveye ulaştığı nokta ise **32.000** episod oldu. Bu noktada ajan **%94.4 konfor** sağlarken sadece **6.7 kW** enerji tüketti.
+Sonuçları incelediğimde, ajanın **ilk 10.000 episodda** %90'a ulaştığını gördüm. Performansın zirveye ulaştığı nokta ise **32.000 episod** oldu. Bu noktada ajan **%90.9 konfor** sağlarken sadece **7.0 kW** enerji tüketti. Daha sonraki episodlarda performans %87.9 ile %90.9 arasında stabil kaldı, bu da politikanın güvenilir şekilde öğrenildiğini gösteriyor.
 
-Toplam eğitim süresi: **1.2 dakika** sürdü.
-
-![Eğitim Sonuçları](eğitim_grafik.png)
+Toplam eğitim süresi: **3.7 dakika** sürdü.
 
 ## 7. Test Sonuçları
 
-Eğittiğim modeli standart yaz günü senaryosunda test ettiğimde şu sonuçları aldım:
-```
-STANDARD_TEMPS = [20, 19, 19, 20, 21, 22, 24, 26, 28, 30, 32, 34,
-                  35, 35, 34, 32, 30, 29, 28, 27, 26, 25, 24, 23]
-```
-### Genel Performans
+Eğittiğim modeli 3 farklı senaryo üzerinde test ettiğimde şu sonuçları aldım:
 
-| Metrik | Değer |
-|:-------|:------|
-| Mesai Saati Konfor Başarısı | %88.9 (8/9 saat) |
-| Toplam Enerji Tüketimi | 8.0 kW |
-| Mesai Saati Enerji | 5.5 kW (%68.4) |
-| Ortalama Mesai Sıcaklığı | 23.2°C |
-| İhlal Sayısı | 1/9 saat |
+### Genel Performans Özeti
 
-### Saatlik Performans Özeti
+| Senaryo | Konfor Oranı | Toplam Ödül | Enerji Tüketimi | Not |
+|:--------|:-------------|:------------|:----------------|:----|
+| **Hot Summer** | %100.0 (11/11 saat) | 1639.0 | 5.5 kW | A++ |
+| **Mild Spring** | %100.0 (11/11 saat) | 1648.8 | 0.6 kW | A++ |
+| **Cold Winter** | %100.0 (11/11 saat) | 1622.4 | 13.8 kW | A++ |
 
-**Gece (00:00-05:00):** Sistem kapalı, doğal soğuma → Enerji: 0.0 kW
 
-**Hazırlık (06:00-08:00):** Aktif soğutma, mesai için hazırlık → Enerji: 2.5 kW
-
-**Mesai (09:00-17:00):** 
-- 09:00: Hafif düşük (21.9°C), ısıtma yapıldı
-- 10:00-13:00: Konfor aralığında, akıllı kapalı/açık stratejisi
-- 14:00: Tek ihlal (24.6°C), hemen müdahale
-- 15:00-17:00: Konfor aralığına dönüş
-- Enerji: 5.5 kW
-
-**Akşam (18:00-23:00):** Sistem kapalı, doğal soğuma → Enerji: 0.0 kW
-
-![Test Sonuçları Dashboard](smart_office_qlearning_analysis.png)
+![Test Sonuçları Dashboard](eko_ofis_analiz_sonuclari.png)
 
 **Değerlendirme:**
 
-Test aşamasında ajanın **mesai saatlerinde enerji tasarrufu yaptığını**, kritik sıcaklık artışlarında hızla müdahale ettiğini ve **yasak saatlerde (gece/akşam) hiç enerji harcamadığını** gözlemledim. Özellikle öğle saatlerinde (11:00-16:00) sistemi kapatmadan önce sıcaklığı kontrol eden "Noon Shield" mekanizmasının başarıyla çalıştığını gördüm.
+Test aşamasında ajanın **3 farklı hava durumunda da mükemmel performans** gösterdiğini gözlemledim. En önemlisi, senaryo zorluğuna göre enerji tüketimini akıllıca ölçeklendirdi: ılıman havada minimal (0.6 kW), aşırı sıcakta orta (5.5 kW), aşırı soğukta maksimum (13.8 kW) enerji harcadı. Tüm senaryolarda **mesai dışı saatlerde sistemi kapatarak** gereksiz enerji tüketiminden kaçındı ve **%100 konfor oranı** elde etti.
 
-**Test Episode Animasyonu:**
+**Test Episode Animasyonları:**
 
 <p align="center">
-  <img src="smart_office_result.gif" width="500" title="Q-Learning Akıllı Klima Sistemi">
+  <img src="ecosmart_office_hot_summer.gif" width="400" title="Hot Summer Scenario"/>
+  <img src="ecosmart_office_mild_spring.gif" width="400" title="Mild Spring Scenario"/>
 </p>
+<p align="center">
+  <img src="ecosmart_office_cold_winter.gif" width="400" title="Cold Winter Scenario"/>
+</p>
+
