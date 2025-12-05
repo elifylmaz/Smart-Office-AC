@@ -166,16 +166,13 @@ Eğitim sürecinden elde ettiğim veriler aşağıdaki gibidir:
 | 20.000 | 0.449 | 90.9 | 7.6 | 1634.7 | Enerji ↓ |
 | 24.000 | 0.383 | 90.9 | 7.4 | 1635.1 | Enerji ↓ |
 | **32.000** | **0.278** | **90.9** | **7.0** | **1636.0** | **EN İYİ** |
-| 40.000+ | 0.202 → 0.010 | 90.9 / 87.9 | 6.8 - 7.7 | 1535-1636 | Stabil |
 | 200.000 | 0.010 | 87.9 | 7.1 | 1551.3 | Final |
 
 ![Eğitim Sonuçları](eğitim_grafiği.png)
 
 **Analiz:**
 
-Sonuçları incelediğimde, ajanın **ilk 10.000 episodda** %90'a ulaştığını gördüm. Performansın zirveye ulaştığı nokta ise **32.000 episod** oldu. Bu noktada ajan **%90.9 konfor** sağlarken sadece **7.0 kW** enerji tüketti. Daha sonraki episodlarda performans %87.9 ile %90.9 arasında stabil kaldı, bu da politikanın güvenilir şekilde öğrenildiğini gösteriyor.
-
-Toplam eğitim süresi: **3.7 dakika** sürdü.
+Sonuçları incelediğimde, ajanın **ilk 10.000 episodda** %90'a ulaştığını gördüm. Performansın zirveye ulaştığı nokta ise **32.000 episod** oldu. Bu noktada ajan **%90.9 konfor** sağlarken sadece **7.0 kW** enerji tüketti.Toplam eğitim süresi: **3.7 dakika** sürdü.
 
 ## 7. Test Sonuçları
 
